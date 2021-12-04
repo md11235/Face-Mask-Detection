@@ -23,6 +23,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import argparse
 import os
+from sklearn.preprocessing import OneHotEncoder
 
 # construct the argument parser and parse the arguments
 ap = argparse.ArgumentParser()
@@ -38,8 +39,8 @@ args = vars(ap.parse_args())
 # initialize the initial learning rate, number of epochs to train for,
 # and batch size
 INIT_LR = 1e-4
-EPOCHS = 20
-BS = 32
+EPOCHS = 200000
+BS = 16
 
 # grab the list of images in our dataset directory, then initialize
 # the list of data (i.e., images) and class images
@@ -67,9 +68,21 @@ data = np.array(data, dtype="float32")
 labels = np.array(labels)
 
 # perform one-hot encoding on the labels
-lb = LabelBinarizer()
-labels = lb.fit_transform(labels)
-labels = to_categorical(labels)
+# lb = LabelBinarizer()
+# labels = lb.fit_transform(labels)
+# labels = to_categorical(labels)
+
+encoder = OneHotEncoder(sparse=False)
+# transform data
+labels = labels.reshape((-1, 1))
+labels = encoder.fit_transform(labels)
+
+print(labels)
+print(labels.shape)
+
+#print(encoder.categories_)
+
+#exit()
 
 # partition the data into training and testing splits using 75% of
 # the data for training and the remaining 25% for testing
@@ -98,7 +111,7 @@ headModel = AveragePooling2D(pool_size=(7, 7))(headModel)
 headModel = Flatten(name="flatten")(headModel)
 headModel = Dense(128, activation="relu")(headModel)
 headModel = Dropout(0.5)(headModel)
-headModel = Dense(2, activation="softmax")(headModel)
+headModel = Dense(4, activation="softmax")(headModel)
 
 # place the head FC model on top of the base model (this will become
 # the actual model we will train)
@@ -134,7 +147,7 @@ predIdxs = np.argmax(predIdxs, axis=1)
 
 # show a nicely formatted classification report
 print(classification_report(testY.argmax(axis=1), predIdxs,
-	target_names=lb.classes_))
+	                        target_names=encoder.categories_[0]))
 
 # serialize the model to disk
 print("[INFO] saving mask detector model...")
