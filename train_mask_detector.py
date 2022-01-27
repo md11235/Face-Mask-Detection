@@ -5,6 +5,7 @@
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.applications import MobileNetV2
 from tensorflow.keras.layers import AveragePooling2D
+from tensorflow.keras.layers import MaxPooling2D
 from tensorflow.keras.layers import Dropout
 from tensorflow.keras.layers import Flatten
 from tensorflow.keras.layers import Dense
@@ -26,8 +27,10 @@ import argparse
 import os
 from sklearn.preprocessing import OneHotEncoder
 
-from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
+from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, LearningRateScheduler
 import tensorflow as tf
+from tensorflow.keras import backend as K
+from tensorflow.keras.models import load_model
 
 tf.keras.backend.set_image_data_format('channels_last')
 
@@ -41,6 +44,12 @@ ap.add_argument("-p", "--plot", type=str, default="plot.png",
 ap.add_argument("-m", "--model", type=str,
 	default="mask_detector.model",
 	help="path to output face mask detector model")
+ap.add_argument("-r", "--resume", type=str, default=None,
+                help="path to previously trained model")
+ap.add_argument("-e", "--numepoch", type=int, default=0,
+                help="start epoch number")
+ap.add_argument("-l", "--learningrate", type=float, default=0.0,
+                help="learning rate")
 args = vars(ap.parse_args())
 
 # initialize the initial learning rate, number of epochs to train for,
@@ -61,6 +70,10 @@ for imagePath in imagePaths:
 	# extract the class label from the filename
 	label = imagePath.split(os.path.sep)[-2]
 
+	if not label in ['Correct', 'BelowNose']:
+	# if not label in ['with_mask', 'without_mask']:
+	    continue
+
 	# load the input image (224x224) and preprocess it
 	image = load_img(imagePath, target_size=(224, 224))
 	image = img_to_array(image)
@@ -74,6 +87,8 @@ for imagePath in imagePaths:
 data = np.array(data, dtype="float32")
 labels = np.array(labels)
 
+num_classes = len(set(labels))
+
 # perform one-hot encoding on the labels
 # lb = LabelBinarizer()
 # labels = lb.fit_transform(labels)
@@ -84,14 +99,14 @@ encoder = OneHotEncoder(sparse=False)
 labels = labels.reshape((-1, 1))
 labels = encoder.fit_transform(labels)
 
-print(encoder.inverse_transform(np.asarray([[0., 0., 0., 1.]])))
-print(encoder.inverse_transform(np.asarray([[0., 0., 1., 0.]])))
-print(encoder.inverse_transform(np.asarray([[0., 1., 0., 0.]])))
-print(encoder.inverse_transform(np.asarray([[1., 0., 0., 0.]])))
+# print(encoder.inverse_transform(np.asarray([[0., 0., 0., 1.]])))
+# print(encoder.inverse_transform(np.asarray([[0., 0., 1., 0.]])))
+# print(encoder.inverse_transform(np.asarray([[0., 1., 0., 0.]])))
+# print(encoder.inverse_transform(np.asarray([[1., 0., 0., 0.]])))
 
 # exit()
-# print(labels)
-# print(labels.shape)
+print(labels)
+print(labels.shape)
 
 #print(encoder.categories_)
 
@@ -106,8 +121,6 @@ print(encoder.inverse_transform(np.asarray([[1., 0., 0., 0.]])))
 # print(np.unique(trainY, axis=0, return_counts=True))
 # print(np.unique(testY, axis=0, return_counts=True))
 
-# exit()
-
 # construct the training image generator for data augmentation
 aug = ImageDataGenerator(
 	rotation_range=20,
@@ -118,37 +131,63 @@ aug = ImageDataGenerator(
 	horizontal_flip=True,
 	fill_mode="nearest")
 
-# load the MobileNetV2 network, ensuring the head FC layer sets are
-# left off
-baseModel = MobileNetV2(weights="imagenet", include_top=False,
-	input_tensor=Input(shape=(224, 224, 3)))
+if args["resume"] is None:
+    print("Train from scratch.")
+    # load the MobileNetV2 network, ensuring the head FC layer sets are
+    # left off
+    baseModel = MobileNetV2(weights="imagenet", include_top=False,
+    	input_tensor=Input(shape=(224, 224, 3)))
+    
+    # construct the head of the model that will be placed on top of the
+    # the base model
+    headModel = baseModel.output
+    headModel = AveragePooling2D(pool_size=(7, 7))(headModel)
+    headModel = Flatten(name="flatten")(headModel)
+    headModel = Dense(128, activation="relu")(headModel)
+    headModel = Dropout(0.5)(headModel)
+    headModel = Dense(num_classes, activation="softmax")(headModel)
+    
+    # place the head FC model on top of the base model (this will become
+    # the actual model we will train)
+    model = Model(inputs=baseModel.input, outputs=headModel)
+    
+    # loop over all layers in the base model and freeze them so they will
+    # *not* be updated during the first training process
+    for layer in baseModel.layers:
+    	layer.trainable = True
+    
+    # compile our model
+    print("[INFO] compiling model...")
+    opt = Adam(lr=INIT_LR, decay=0.99)
+    model.compile(loss="categorical_crossentropy", optimizer=opt,
+    	metrics=["accuracy"])
+    start_epoch = 0
+else:
+    print("Resume training at {}".format(args["resume"]))
+    start_epoch = args["numepoch"]
+    model = load_model(args["resume"])
 
-# construct the head of the model that will be placed on top of the
-# the base model
-headModel = baseModel.output
-headModel = AveragePooling2D(pool_size=(7, 7))(headModel)
-headModel = Flatten(name="flatten")(headModel)
-headModel = Dense(128, activation="relu")(headModel)
-headModel = Dropout(0.5)(headModel)
-headModel = Dense(4, activation="softmax")(headModel)
-
-# place the head FC model on top of the base model (this will become
-# the actual model we will train)
-model = Model(inputs=baseModel.input, outputs=headModel)
-
-# loop over all layers in the base model and freeze them so they will
-# *not* be updated during the first training process
-for layer in baseModel.layers:
-	layer.trainable = False
-
-# compile our model
-print("[INFO] compiling model...")
-opt = Adam(lr=INIT_LR, decay=INIT_LR / EPOCHS)
-model.compile(loss="categorical_crossentropy", optimizer=opt,
-	metrics=["accuracy"])
+    if args["learningrate"] > 0.0:
+        K.set_value(model.optimizer.lr, args["learningrate"])
 
 # train the head of the network
 print("[INFO] training head...")
+
+
+def scheduler(epoch):
+    if epoch%100==0 and epoch!=0:
+        lr = K.get_value(model.optimizer.lr)
+        new_lr = lr*.9999
+        K.set_value(model.optimizer.lr, new_lr)
+        print("lr changed to {}".format(new_lr))
+    else: 
+        print("lr remains {}".format(K.get_value(model.optimizer.lr)))
+
+    return K.get_value(model.optimizer.lr)
+
+
+lr_schedule = LearningRateScheduler(scheduler)
+
 early_stopping = EarlyStopping(monitor='val_loss', min_delta=0.000001, patience=100)
 model_checkpoint =  ModelCheckpoint("trained_models/" + 'mobilenet_v2_face_epoch_{epoch:09d}_loss{val_loss:.4f}.h5',
                                     monitor='val_loss',
@@ -162,8 +201,9 @@ H = model.fit(
 	steps_per_epoch=len(trainX) // BS,
 	validation_data=(testX, testY),
 	validation_steps=len(testX) // BS,
+	initial_epoch=start_epoch,
 	epochs=EPOCHS,
-	callbacks=[early_stopping, model_checkpoint]
+	callbacks=[early_stopping, model_checkpoint, lr_schedule]
 )
 
 # make predictions on the testing set
@@ -174,26 +214,32 @@ print(predIdxs)
 # for each image in the testing set we need to find the index of the
 # label with corresponding largest predicted probability
 predIdxs = np.argmax(predIdxs, axis=1)
-print(predIdxs)
-
-print(testY.argmax(axis=1))
+predY = tf.one_hot(predIdxs, depth=num_classes)
+print(predY)
 # show a nicely formatted confusion matrix
-cat_names = encoder.categories_[0]
+# cat_names = encoder.categories_[0]
 
-cmtx = pd.DataFrame(
-    confusion_matrix([cat_names[ind] for ind in testY.argmax(axis=1)],
-                     [cat_names[ind] for ind in predIdxs],
-                     labels=cat_names),
-    index=["true: {}".format(cn) for cn in cat_names],
-    columns=["pred: {}".format(cn) for cn in cat_names]
-)
+# cmtx = pd.DataFrame(
+#     confusion_matrix([cat_names[ind] for ind in testY.argmax(axis=1)],
+#                      [cat_names[ind] for ind in predIdxs],
+#                      labels=cat_names),
+#     index=["true: {}".format(cn) for cn in cat_names],
+#     columns=["pred: {}".format(cn) for cn in cat_names]
+# )
 
-print(cmtx)
+# print(cmtx)
 
-# y_true = pd.Series([2, 0, 2, 2, 0, 1, 1, 2, 2, 0, 1, 2])
-# y_pred = pd.Series([0, 0, 2, 1, 0, 2, 1, 0, 2, 0, 2, 2])
+testY_labels = encoder.inverse_transform(testY)
+predY_labels = encoder.inverse_transform(predY)
 
-# pd.crosstab(y_true, y_pred, rownames=['True'], colnames=['Predicted'], margins=True)
+# print(testY_labels)
+# print(predY_labels)
+# print(testY_labels.shape)
+# print(predY_labels.shape)
+y_true = pd.Series(testY_labels.reshape((-1,)))
+y_pred = pd.Series(predY_labels.reshape((-1,)))
+
+print(pd.crosstab(y_true, y_pred, rownames=['True'], colnames=['Predicted'], margins=True))
 
 # serialize the model to disk
 print("[INFO] saving mask detector model...")
