@@ -10,15 +10,18 @@ from tensorflow.keras.layers import Dropout
 from tensorflow.keras.layers import Flatten
 from tensorflow.keras.layers import Dense
 from tensorflow.keras.layers import Input
+from tensorflow.keras.layers import Conv2D, Softmax, Concatenate
 from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
 from tensorflow.keras.preprocessing.image import img_to_array
 from tensorflow.keras.preprocessing.image import load_img
 from tensorflow.keras.utils import to_categorical
+
 from sklearn.preprocessing import LabelBinarizer
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report, confusion_matrix
+
 from imutils import paths
 import matplotlib.pyplot as plt
 import numpy as np
@@ -31,6 +34,8 @@ from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, LearningR
 import tensorflow as tf
 from tensorflow.keras import backend as K
 from tensorflow.keras.models import load_model
+
+from layers import ChannelWiseDotProduct, FusedFeatureSpectrum
 
 tf.keras.backend.set_image_data_format('channels_last')
 
@@ -141,15 +146,30 @@ if args["resume"] is None:
     # construct the head of the model that will be placed on top of the
     # the base model
     headModel = baseModel.output
-    headModel = AveragePooling2D(pool_size=(7, 7))(headModel)
-    headModel = Flatten(name="flatten")(headModel)
-    headModel = Dense(128, activation="relu")(headModel)
+
+    attention_branch = Conv2D(1280, 3, padding='same')(headModel)
+    attention_branch = Conv2D(1280, 1, padding='same')(attention_branch)
+    attention_branch = Softmax()(attention_branch)
+    attention_branch = ChannelWiseDotProduct()(attention_branch, headModel)
+    attention_branch = FusedFeatureSpectrum()(attention_branch, headModel)
+
+    flat_attention = Flatten(name="flatten")(attention_branch)
+    headModel = Dense(128, activation="relu")(flat_attention)
     headModel = Dropout(0.5)(headModel)
+    headModel = Concatenate()([headModel, flat_attention])
     headModel = Dense(num_classes, activation="softmax")(headModel)
+    
+    # headModel = AveragePooling2D(pool_size=(7, 7))(headModel)
+    # headModel = Flatten(name="flatten")(headModel)
+    # headModel = Dense(128, activation="relu")(headModel)
+    # headModel = Dropout(0.5)(headModel)
+    # headModel = Dense(num_classes, activation="softmax")(headModel)
     
     # place the head FC model on top of the base model (this will become
     # the actual model we will train)
     model = Model(inputs=baseModel.input, outputs=headModel)
+
+    model.summary()
     
     # loop over all layers in the base model and freeze them so they will
     # *not* be updated during the first training process

@@ -3,6 +3,7 @@
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
+import numpy as np
 
 
 class FusedFeatureSpectrum(layers.Layer):
@@ -10,7 +11,6 @@ class FusedFeatureSpectrum(layers.Layer):
         super(FusedFeatureSpectrum, self).__init__(**kwargs)
 
     def call(self, attention_feature_spectrum, conv_spectrum):
-        new_afs_shape = list(tf.shape(attention_feature_spectrum).numpy()) + [1]
-        new_afs = tf.reshape(attention_feature_spectrum, shape=new_afs_shape)
+        new_afs = tf.expand_dims(attention_feature_spectrum, axis=-1)
 
         return tf.add(conv_spectrum, tf.multiply(conv_spectrum, new_afs))
