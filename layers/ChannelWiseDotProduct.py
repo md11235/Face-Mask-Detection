@@ -13,4 +13,5 @@ class ChannelWiseDotProduct(layers.Layer):
         tensor_a = attention_spectrum
         tensor_b = conv_spectrum
 
-        return tf.reduce_sum(layers.multiply([tensor_a, tensor_b]), -1)
+        # return tf.reduce_sum(layers.multiply([tensor_a, tensor_b]), -1)
+        return layers.multiply([tensor_a, tensor_b])

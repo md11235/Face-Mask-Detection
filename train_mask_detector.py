@@ -146,7 +146,8 @@ if args["resume"] is None:
     # construct the head of the model that will be placed on top of the
     # the base model
     headModel = baseModel.output
-
+    headModel = AveragePooling2D(pool_size=(7, 7))(headModel)
+    
     attention_branch = Conv2D(1280, 3, padding='same')(headModel)
     attention_branch = Conv2D(1280, 1, padding='same')(attention_branch)
     attention_branch = Softmax()(attention_branch)
@@ -154,8 +155,9 @@ if args["resume"] is None:
     attention_branch = FusedFeatureSpectrum()(attention_branch, headModel)
 
     flat_attention = Flatten(name="flatten")(attention_branch)
-    headModel = Dense(128, activation="relu")(flat_attention)
+    headModel = Dense(256, activation="relu")(flat_attention)
     headModel = Dropout(0.5)(headModel)
+    headModel = Dense(128, activation="relu")(headModel)
     headModel = Concatenate()([headModel, flat_attention])
     headModel = Dense(num_classes, activation="softmax")(headModel)
     
@@ -208,7 +210,7 @@ def scheduler(epoch):
 
 lr_schedule = LearningRateScheduler(scheduler)
 
-early_stopping = EarlyStopping(monitor='val_loss', min_delta=0.000001, patience=100)
+early_stopping = EarlyStopping(monitor='val_loss', min_delta=0.0000001, patience=100)
 model_checkpoint =  ModelCheckpoint("trained_models/" + 'mobilenet_v2_face_epoch_{epoch:09d}_loss{val_loss:.4f}.h5',
                                     monitor='val_loss',
                                     verbose=1,
