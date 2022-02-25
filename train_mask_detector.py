@@ -184,7 +184,7 @@ if args["resume"] is None:
     # loop over all layers in the base model and freeze them so they will
     # *not* be updated during the first training process
     for layer in baseModel.layers:
-    	layer.trainable = False
+    	layer.trainable = True
     
     # compile our model
     print("[INFO] compiling model...")
