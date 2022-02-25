@@ -36,6 +36,13 @@ from tensorflow.keras import backend as K
 from tensorflow.keras.models import load_model
 
 from layers import ChannelWiseDotProduct, FusedFeatureSpectrum
+from keras.backend.tensorflow_backend import set_session
+
+config = tf.compat.v1.ConfigProto()
+config.gpu_options.allow_growth = True  # dynamically grow the memory used on the GPU
+config.log_device_placement = True  # to log device placement (on which device the operation ran)
+sess = tf.compat.v1.Session(config=config)
+set_session(sess)  # set this TensorFlow session as the default session for Keras
 
 tf.keras.backend.set_image_data_format('channels_last')
 
@@ -75,7 +82,7 @@ for imagePath in imagePaths:
 	# extract the class label from the filename
 	label = imagePath.split(os.path.sep)[-2]
 
-	if not label in ['Correct', 'BelowNose']:
+	if not label in ['AroundNeck', 'Correct', 'BelowNose', 'NoMask']:
 	# if not label in ['with_mask', 'without_mask']:
 	    continue
 
@@ -145,18 +152,19 @@ if args["resume"] is None:
     
     # construct the head of the model that will be placed on top of the
     # the base model
-    headModel = baseModel.output
-    headModel = AveragePooling2D(pool_size=(7, 7))(headModel)
-    
+    headModel_orig = baseModel.output
+
+    headModel = AveragePooling2D(pool_size=(7, 7))(headModel_orig)
     attention_branch = Conv2D(1280, 3, padding='same')(headModel)
     attention_branch = Conv2D(1280, 1, padding='same')(attention_branch)
     attention_branch = Softmax()(attention_branch)
+    # attention_branch = ChannelWiseDotProduct()(attention_branch, headModel_orig)
+    # attention_branch = FusedFeatureSpectrum()(attention_branch, headModel_orig)
     attention_branch = ChannelWiseDotProduct()(attention_branch, headModel)
     attention_branch = FusedFeatureSpectrum()(attention_branch, headModel)
-
     flat_attention = Flatten(name="flatten")(attention_branch)
     headModel = Dense(256, activation="relu")(flat_attention)
-    headModel = Dropout(0.5)(headModel)
+    headModel = Dropout(0.1)(headModel)
     headModel = Dense(128, activation="relu")(headModel)
     headModel = Concatenate()([headModel, flat_attention])
     headModel = Dense(num_classes, activation="softmax")(headModel)
@@ -164,7 +172,7 @@ if args["resume"] is None:
     # headModel = AveragePooling2D(pool_size=(7, 7))(headModel)
     # headModel = Flatten(name="flatten")(headModel)
     # headModel = Dense(128, activation="relu")(headModel)
-    # headModel = Dropout(0.5)(headModel)
+    # headModel = Dropout(0.1)(headModel)
     # headModel = Dense(num_classes, activation="softmax")(headModel)
     
     # place the head FC model on top of the base model (this will become
@@ -172,15 +180,15 @@ if args["resume"] is None:
     model = Model(inputs=baseModel.input, outputs=headModel)
 
     model.summary()
-    
+
     # loop over all layers in the base model and freeze them so they will
     # *not* be updated during the first training process
     for layer in baseModel.layers:
-    	layer.trainable = True
+    	layer.trainable = False
     
     # compile our model
     print("[INFO] compiling model...")
-    opt = Adam(lr=INIT_LR, decay=0.99)
+    opt = Adam(lr=INIT_LR, decay=1.0)
     model.compile(loss="categorical_crossentropy", optimizer=opt,
     	metrics=["accuracy"])
     start_epoch = 0
@@ -199,7 +207,7 @@ print("[INFO] training head...")
 def scheduler(epoch):
     if epoch%100==0 and epoch!=0:
         lr = K.get_value(model.optimizer.lr)
-        new_lr = lr*.9999
+        new_lr = lr*0.999
         K.set_value(model.optimizer.lr, new_lr)
         print("lr changed to {}".format(new_lr))
     else: 
@@ -210,7 +218,7 @@ def scheduler(epoch):
 
 lr_schedule = LearningRateScheduler(scheduler)
 
-early_stopping = EarlyStopping(monitor='val_loss', min_delta=0.0000001, patience=100)
+early_stopping = EarlyStopping(monitor='val_loss', min_delta=0.0000001, patience=300)
 model_checkpoint =  ModelCheckpoint("trained_models/" + 'mobilenet_v2_face_epoch_{epoch:09d}_loss{val_loss:.4f}.h5',
                                     monitor='val_loss',
                                     verbose=1,
