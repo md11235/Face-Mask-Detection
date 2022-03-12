@@ -4,6 +4,7 @@
 # import the necessary packages
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.applications import MobileNetV2
+from tensorflow.keras.applications import VGG16
 from tensorflow.keras.layers import AveragePooling2D
 from tensorflow.keras.layers import MaxPooling2D
 from tensorflow.keras.layers import Dropout
@@ -147,26 +148,28 @@ if args["resume"] is None:
     print("Train from scratch.")
     # load the MobileNetV2 network, ensuring the head FC layer sets are
     # left off
-    baseModel = MobileNetV2(weights="imagenet", include_top=False,
+    baseModel = VGG16(weights="imagenet", include_top=False,
     	input_tensor=Input(shape=(224, 224, 3)))
     
     # construct the head of the model that will be placed on top of the
     # the base model
     headModel_orig = baseModel.output
 
-    headModel = AveragePooling2D(pool_size=(7, 7))(headModel_orig)
-    attention_branch = Conv2D(1280, 3, padding='same')(headModel)
-    attention_branch = Conv2D(1280, 1, padding='same')(attention_branch)
+    headModel_gap = AveragePooling2D(pool_size=(7, 7))(headModel_orig)
+    attention_branch = Conv2D(512, 3, padding='same')(headModel_gap)
+    attention_branch = Conv2D(512, 1, padding='same')(attention_branch)
     attention_branch = Softmax()(attention_branch)
     # attention_branch = ChannelWiseDotProduct()(attention_branch, headModel_orig)
     # attention_branch = FusedFeatureSpectrum()(attention_branch, headModel_orig)
-    attention_branch = ChannelWiseDotProduct()(attention_branch, headModel)
-    attention_branch = FusedFeatureSpectrum()(attention_branch, headModel)
+    attention_branch = ChannelWiseDotProduct()(attention_branch, headModel_gap)
+    attention_branch = FusedFeatureSpectrum()(attention_branch, headModel_gap)
     flat_attention = Flatten(name="flatten")(attention_branch)
     headModel = Dense(256, activation="relu")(flat_attention)
     headModel = Dropout(0.1)(headModel)
     headModel = Dense(128, activation="relu")(headModel)
-    headModel = Concatenate()([headModel, flat_attention])
+
+    headModel_gap_flattern = Flatten(name="headModel_gap_flattern")(headModel_gap)
+    headModel = Concatenate()([headModel_gap_flattern, flat_attention])
     headModel = Dense(num_classes, activation="softmax")(headModel)
     
     # headModel = AveragePooling2D(pool_size=(7, 7))(headModel)
