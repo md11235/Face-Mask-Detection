@@ -4,6 +4,7 @@
 # import the necessary packages
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.applications import MobileNetV2
+from tensorflow.keras.applications import MobileNetV3
 from tensorflow.keras.applications import VGG16
 from tensorflow.keras.layers import AveragePooling2D
 from tensorflow.keras.layers import MaxPooling2D
@@ -148,7 +149,7 @@ if args["resume"] is None:
     print("Train from scratch.")
     # load the MobileNetV2 network, ensuring the head FC layer sets are
     # left off
-    baseModel = VGG16(weights="imagenet", include_top=False,
+    baseModel = MobileNetV3(weights="imagenet", include_top=False,
     	input_tensor=Input(shape=(224, 224, 3)))
     
     # construct the head of the model that will be placed on top of the
