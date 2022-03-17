@@ -237,7 +237,7 @@ H = model.fit(
 	validation_steps=len(testX) // BS,
 	initial_epoch=start_epoch,
 	epochs=EPOCHS,
-	callbacks=[early_stopping, model_checkpoint, lr_schedule]
+	callbacks=[early_stopping, lr_schedule]
 )
 
 # make predictions on the testing set
