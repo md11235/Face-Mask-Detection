@@ -169,8 +169,8 @@ if args["resume"] is None:
     headModel = Dropout(0.1)(headModel)
     headModel = Dense(128, activation="relu")(headModel)
 
-    headModel_gap_flattern = Flatten(name="headModel_gap_flattern")(headModel_gap)
-    headModel = Concatenate()([headModel_gap_flattern, flat_attention])
+    # headModel_gap_flattern = Flatten(name="headModel_gap_flattern")(headModel_gap)
+    # headModel = Concatenate()([headModel_gap_flattern, flat_attention])
     headModel = Dense(num_classes, activation="softmax")(headModel)
     
     # headModel = AveragePooling2D(pool_size=(7, 7))(headModel)
