@@ -154,26 +154,27 @@ if args["resume"] is None:
     # the base model
     headModel_orig = baseModel.output
 
-    headModel = AveragePooling2D(pool_size=(7, 7))(headModel_orig)
-    attention_branch = Conv2D(1280, 3, padding='same')(headModel)
-    attention_branch = Conv2D(1280, 1, padding='same')(attention_branch)
-    attention_branch = Softmax()(attention_branch)
-    # attention_branch = ChannelWiseDotProduct()(attention_branch, headModel_orig)
-    # attention_branch = FusedFeatureSpectrum()(attention_branch, headModel_orig)
-    attention_branch = ChannelWiseDotProduct()(attention_branch, headModel)
-    attention_branch = FusedFeatureSpectrum()(attention_branch, headModel)
-    flat_attention = Flatten(name="flatten")(attention_branch)
-    headModel = Dense(256, activation="relu")(flat_attention)
-    headModel = Dropout(0.1)(headModel)
-    headModel = Dense(128, activation="relu")(headModel)
-    # headModel = Concatenate()([headModel, flat_attention])
-    headModel = Dense(num_classes, activation="softmax")(headModel)
+    # headModel = AveragePooling2D(pool_size=(7, 7))(headModel_orig)
+    # attention_branch = Conv2D(1280, 3, padding='same')(headModel)
+    # attention_branch = Conv2D(1280, 1, padding='same')(attention_branch)
+    # attention_branch = Softmax()(attention_branch)
+    # # attention_branch = ChannelWiseDotProduct()(attention_branch, headModel_orig)
+    # # attention_branch = FusedFeatureSpectrum()(attention_branch, headModel_orig)
+    # attention_branch = ChannelWiseDotProduct()(attention_branch, headModel)
+    # attention_branch = FusedFeatureSpectrum()(attention_branch, headModel)
+    # flat_attention = Flatten(name="flatten")(attention_branch)
+    # headModel = Dense(256, activation="relu")(flat_attention)
+    # headModel = Dropout(0.1)(headModel)
+    # headModel = Dense(128, activation="relu")(headModel)
+    # # headModel = Concatenate()([headModel, flat_attention])
+    # headModel = Dense(num_classes, activation="softmax")(headModel)
     
     # headModel = AveragePooling2D(pool_size=(7, 7))(headModel)
-    # headModel = Flatten(name="flatten")(headModel)
-    # headModel = Dense(128, activation="relu")(headModel)
-    # headModel = Dropout(0.1)(headModel)
-    # headModel = Dense(num_classes, activation="softmax")(headModel)
+    headModel = Flatten(name="flatten")(headModel_orig)
+    headModel = Dense(256, activation="relu")(headModel)
+    headModel = Dropout(0.1)(headModel)
+    headModel = Dense(128, activation="relu")(headModel)
+    headModel = Dense(num_classes, activation="softmax")(headModel)
     
     # place the head FC model on top of the base model (this will become
     # the actual model we will train)
@@ -233,7 +234,7 @@ H = model.fit(
 	validation_steps=len(testX) // BS,
 	initial_epoch=start_epoch,
 	epochs=EPOCHS,
-	callbacks=[early_stopping, model_checkpoint, lr_schedule]
+	callbacks=[early_stopping, lr_schedule]
 )
 
 # make predictions on the testing set
