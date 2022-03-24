@@ -165,18 +165,20 @@ if args["resume"] is None:
     attention_branch = ChannelWiseDotProduct()(attention_branch, headModel_gap)
     attention_branch = FusedFeatureSpectrum()(attention_branch, headModel_gap)
     flat_attention = Flatten(name="flatten")(attention_branch)
-    headModel = Dense(256, activation="relu")(flat_attention)
-    headModel = Dropout(0.1)(headModel)
-    headModel = Dense(128, activation="relu")(headModel)
 
     headModel_gap_flattern = Flatten(name="headModel_gap_flattern")(headModel_gap)
     headModel = Concatenate()([headModel_gap_flattern, flat_attention])
+
+    headModel = Dense(256, activation="relu")(headModel)
+    headModel = Dropout(0.1)(headModel)
+    headModel = Dense(128, activation="relu")(headModel)
     headModel = Dense(num_classes, activation="softmax")(headModel)
     
-    # headModel = AveragePooling2D(pool_size=(7, 7))(headModel)
+    # headModel = AveragePooling2D(pool_size=(7, 7))(headModel_orig)
     # headModel = Flatten(name="flatten")(headModel)
-    # headModel = Dense(128, activation="relu")(headModel)
+    # headModel = Dense(256, activation="relu")(flat_attention)
     # headModel = Dropout(0.1)(headModel)
+    # headModel = Dense(128, activation="relu")(headModel)
     # headModel = Dense(num_classes, activation="softmax")(headModel)
     
     # place the head FC model on top of the base model (this will become
