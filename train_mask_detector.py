@@ -169,7 +169,7 @@ if args["resume"] is None:
     # # headModel = Concatenate()([headModel, flat_attention])
     # headModel = Dense(num_classes, activation="softmax")(headModel)
     
-    headModel = AveragePooling2D(pool_size=(7, 7))(headModel)
+    headModel = AveragePooling2D(pool_size=(7, 7))(headModel_orig)
     # headModel = Flatten(name="flatten")(headModel_orig)
     headModel = Dense(256, activation="relu")(headModel)
     headModel = Dropout(0.1)(headModel)
