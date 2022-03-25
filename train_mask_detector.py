@@ -170,7 +170,7 @@ if args["resume"] is None:
     # headModel = Dense(num_classes, activation="softmax")(headModel)
     
     headModel = AveragePooling2D(pool_size=(7, 7))(headModel_orig)
-    # headModel = Flatten(name="flatten")(headModel_orig)
+    headModel = Flatten(name="flatten")(headModel)
     headModel = Dense(256, activation="relu")(headModel)
     headModel = Dropout(0.1)(headModel)
     headModel = Dense(128, activation="relu")(headModel)
